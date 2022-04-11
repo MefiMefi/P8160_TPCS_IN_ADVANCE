@@ -1,0 +1,245 @@
+---
+title: "Homework 3 - EM algorithm"
+author: "Leave your name and uni here"
+
+output: pdf_document
+---
+
+**Problem 1**
+
+Recall the ABO blood type data, where we have Nobs = (NA,NB,NO,NAB) = (26, 27, 42, 7).
+
+```{=tex}
+\begin{itemize}
+\item Implementing the EM algorithm to estimate the allele frequencies, PA, PB and PO in R  and present your results.
+\end{itemize}
+```
+\textbf{Answer:}
+
+Since we only observed the number of people with each phenotype $N_{\text{obs}} = (N_{A}, N_{B}, N_{AB}, N_{O}) = (26, 27, 42, 7)$, our goal is to estimate the frequencies of alleles A, B, and O, denoted by $p_A$, $p_B$, and $p_O$ respectively. So we estimate the frequencies according to the Hardy-Weinberg law, the genotype frequencies are:
+
+$$\mbox{Prob} (\mbox{Genotype} = A/A) = p_A^2$$ $$\mbox{Prob} (\mbox{Genotype} = A/O) = 2p_A p_O$$ $$\mbox{Prob} (\mbox{Genotype} = B/B ) = p_B^2$$ $$\mbox{Prob} (\mbox{Genotype} = B/O) = 2p_B p_O$$ $$\mbox{Prob} (\mbox{Genotype} = A/B) = 2p_A p_B$$ $$\mbox{Prob} (\mbox{Genotype} =  O/O ) = p_O^2$$
+
+Furthermore, genotype counts $N=(N_{A/A}, N_{A/O}, N_{B/B}, N_{B/O}, N_{A/B}, N_{O/O})$ are jointly multinomially distributed with log-likelihood function as shown below.
+
+\begin{eqnarray*}
+\log L(p | N) &=& N_{A/A} \log(p_A^2) + N_{A/O} \log (2 p_A p_O) + N_{B/B} \log(p_B^2) +  N_{B/O} \log(2 p_B p_O) \\
+&+& N_{A/B} \log(2 p_A p_B) + N_{O/O} \log(p_O^2) \\
+&+& \log \Bigl(\frac{n!}{N_{A/A}! N_{A/O}! N_{B/B}! N_{B/O}! N_{A/B}! N_{O/O}!}\Bigr)
+\end{eqnarray*} where $n=N_{A/A} + N_{A/O} + N_{B/B} + N_{B/O} + N_{A/B} + N_{O/O}$.
+
+**E-step**
+
+Note $N_{A/A} + N_{A/O} = N_A$ and $N_{B/B} + N_{B/O} = N_B$. Thus the conditional distribution of $N_{A/A}|N_A$ and $N_{B/B}|N_B$ are:
+
+$$N_{A/A}|N_A \sim \text{Bin}\Biggl( N_A, \frac{p_A^2}{p_A^2 + 2 p_A p_O} \Biggr)$$ and $$
+ \,\,\, N_{B/B}|N_B \sim \text{Bin}\Biggl( N_B, \frac{p_B^2}{p_B^2 + 2 p_B p_O} \Biggr)
+$$ respectively.
+
+Therefore, the expectations in the $k$-th iteration can be easily calculated as follows. $$
+N_{A/A}^{(k)} = E(N_{A/A}|N_{\text{obs}}, p^{(k)}) = N_A \times \frac{{p_A^{(k)}}^2}{{p_A^{(k)}}^2 + 2 p_A^{(k)} p_O^{(k)}}
+$$ $$
+N_{A/O}^{(k)} = E(N_{A/O}|N_{\text{obs}}, p^{(k)}) = N_A \times \frac{2 p_A^{(k)} p_O^{(k)}}{{p_A^{(k)}}^2 + 2 p_A^{(k)} p_O^{(k)}}
+$$ $$
+N_{B/B}^{(k)} = E(N_{B/B}|N_{\text{obs}}, p^{(k)}) = N_B \times \frac{{p_B^{(k)}}^2}{{p_B^{(k)}}^2 + 2 p_B^{(k)} p_O^{(k)}}
+$$ $$
+N_{B/O}^{(k)} = E(N_{B/O}|N_{\text{obs}}, p^{(k)}) = N_B \times \frac{2 p_B^{(k)} p_O^{(k)}}{{p_B^{(k)}}^2 + 2 p_B^{(k)} p_O^{(k)}}.
+$$
+
+Moreover, it is obvious that $$
+N_{A/B}^{(k)} = E(N_{A/B}|N_{\text{obs}}, p^{(k)}) = N_{A/B}
+$$ and $$ 
+N_{O/O}^{(k)}=E(N_{O/O}|N_{\text{obs}}, p^{(k)}) = N_{O/O}.
+$$
+
+**M-step**
+
+Now consider maximizing $Q(p|p^{(k)})$ under the restriction $p_A+p_B+p_O=1$. Introduce Lagrange multiplier $\lambda$ and maximize $$Q_L(p, \lambda|p^{(k)})=Q(p|p^{(k)})+\lambda(p_A+p_B+p_O-1)$$ with respect to $p=(p_A, p_B, p_O)$ and $\lambda$.\\ \begin{eqnarray}
+\frac{\partial Q_L(p, \lambda|p^{(k)})}{\partial p_A}
+&=&\frac{2N_{A/A}^{(k)}}{p_A}+\frac{N_{A/O}^{(k)}}{p_A}+\frac{N_{A/B}^{(k)}}{p_A}+\lambda\\
+\frac{\partial Q_L(p, \lambda|p^{(k)})}{\partial p_B}
+&=&\frac{2N_{B/B}^{(k)}}{p_B}+\frac{N_{B/O}^{(k)}}{p_B}+\frac{N_{A/B}^{(k)}}{p_B}+\lambda\\
+\frac{\partial Q_L(p, \lambda|p^{(k)})}{\partial p_O}
+&=&\frac{N_{A/O}^{(k)}}{p_O}+\frac{N_{B/O}^{(k)}}{p_O}+\frac{2N_{O/O}^{(k)}}{p_O}+\lambda\\
+\frac{\partial Q_L(p, \lambda|p^{(k)})}{\partial p_\lambda}&=&p_A+p_B+p_C-1
+\end{eqnarray}
+
+Since $N_{A/A}^{(k)}+N_{A/O}^{(k)}+N_{B/B}^{(k)}+N_{B/O}^{(k)}+N_{A/B}^{(k)}+N_{O/O}^{(k)}=n$, from the above four functions, we get $\lambda=-2n$. By plugging $\lambda=-2n$ in and setting (1), (2), and (3) to be zero, update $(p_A, p_B, p_O)$ as follows. $$p_A^{(k+1)}=\frac{2N_{A/A}^{(k)}+N_{A/O}^{(k)}+N_{A/B}^{(k)}}{2n}$$ $$p_B^{(k+1)}=\frac{2N_{B/B}^{(k)}+N_{B/O}^{(k)}+N_{A/B}^{(k)}}{2n}$$ $$p_O^{(k+1)}=\frac{2N_{O/O}^{(k)}+N_{A/O}^{(k)}+N_{B/O}^{(k)}}{2n}$$
+
+Repeat E-step and M-step until convergence.
+
+\textbf{R codes:}
+
+```{r}
+# E-step
+# params: N - the obs data, pvec - now estimated c(pa, pb, po)
+Q.abo <- function(N, pvec){
+    pa = pvec[1]
+    pb = pvec[2]
+    po = pvec[3]
+    
+    Na = N[1]
+    Nb = N[2]
+    Nab = N[3]
+    No = N[4]
+    
+    Naa = Na * (pa^2/(pa^2 + 2 * pa * po))
+    Nao = Na * (2 * pa * po/(pa^2 + 2 * pa * po))
+    Nbb = Nb * (pb^2/(pb^2 + 2 * pb * po))
+    Nbo = Nb * (2 * pb * po/(pb^2 + 2 * pb * po)) 
+    Nab = Nab
+    Noo = No
+    
+    Qres <- c(Naa, Nao, Nbb, Nbo, Nab, Noo)
+    return(Qres)
+}
+
+# M-step: Maximize posterior prob
+
+M.abo <- function(N, Qres){
+    n <- sum(N)
+    Naa = Qres[1]
+    Nao = Qres[2]
+    Nbb = Qres[3]
+    Nbo = Qres[4]
+    Nab = Qres[5]
+    Noo = Qres[6]
+    pa <- (2 * Naa + Nao + Nab)/(2*n)
+    pb <- (2 * Nbb + Nbo + Nab)/(2*n)
+    po <- (2 * Noo + Nao + Nbo)/(2*n)
+    Pres <- c(pa, pb, po)
+    return(Pres)
+}
+
+EM.abo <- function(data, init_p = c(0.1, 0.1, 0.8), max_iter = 1e3, tol = 1e-5){
+    i <- 0
+    Q <- Q.abo(data, init_p)
+    res <- c(0, init_p)
+    error <- 1
+    p_cur <- init_p
+    p_old <- NULL
+    while(i < max_iter & error > tol){
+        i <- i + 1
+        p_old <- p_cur
+        p_cur <- M.abo(data, Q)
+        error <- abs(sum(p_cur - p_old))
+        Q <- Q.abo(data, p_cur)
+        res <- rbind(res, c(i, p_cur))
+    }
+    return(res)
+}
+
+
+data.abo = c(26, 27, 42, 7)
+EM.abo(data.abo)
+```
+
+\vskip 30pt
+
+**Problem 2**
+
+Disease D is a chronic neurological condition that leads to fast deterioration of motor and cognitive functions and eventually leads to death. Based on a theoretical model, the survival time of a patient suffered from disease D very much depends on his or her disease onset age. To be specific, let $Y$ as the survival time of a patient from their diagnosis, and $X$ be the disease onset age, the conditional distribution for $Y$ given $X = x$ is exponential with failure rate $0.01x$. $$f(Y=t\mid X=x) =0.01x\exp\{-0.01xt\}.$$ Since D is a chronic condition, its actual onset times are often unobserved. Suppose the disease onset ages in a population also follows an exponential with failure rate $\theta$, where $\theta>0$ is an unknown parameter. Suppose $\{Y_i, \, i = 1,...,n\}$ are observed survival times of $n$ patients with disease D in a population. The public health researchers are interested in estimating the parameter $\theta$ in the population so that they could design disease prevention policies on target ages.
+
+
+
+\begin{enumerate}
+\item Write out the marginal distribution of $Y$, and the observed likelihood function of $\{Y_i, \, i = 1,...,n\}$. 
+
+
+\textbf{Answer:}
+
+$$f_Y(Y_i = y_i|X;\theta) = \frac{1}{\theta}e^{-\frac{y_i}{\theta}},\ y_i\ge0$$
+The observed likelihood is:
+$$L_{\text{obs}}(\theta) = \prod\limits_{i =1}^n \frac{1}{\theta^n}\exp\{{-\sum\limits_{i =1}^{n}\frac{y_i}{\theta}}\}$$
+
+\item Design a univariate optimization algorithm (e.g. Golden search or Newton's method) to find the MLE of the observed likelihood in (1), and specify each step of your algorithm. Implement the algorithm into an R function.
+
+
+\textbf{Answer:}
+
+I would like to develop a Newton's method to find the MLE in (1).
+
+The likelihood function is:
+
+$$L_{\text{obs}}(\theta) = \frac{1}{\theta^n}\exp\{{-\sum\limits_{i =1}^{n}\frac{y_i}{\theta}}\}$$
+In order to maximize the likelihood function, it is same to maximize the log-likelihood function:
+
+$${l}_{obs}(\theta) = -n \log{\theta}-\sum\limits_{i =1}^{n}\frac{y_i}{\theta}$$
+According to Newton's method, we need to find the first derivative of the log-likelihood function w.r.t $\theta$, which is the score function:
+
+$$S(\theta) = \frac{\partial l_{obs}(\theta)}{\partial\theta} = -\frac{n}{\theta}+\frac{\sum\limits_{i=1}^n y_i}{\theta^2}$$
+
+The Newton's method told us to update $\theta_i$ each time to get the maximum of $L_{obs}(\theta)$ by doing this iteratively:
+
+$$\theta_i = \theta_{i-1}-\frac{l_{obs}(\theta_{i-1})}{S(\theta_{i-1})}$$
+
+The implementation of this method is written in the `Newton.obs` function below:
+
+\textbf{R codes:}
+
+
+```{r newton_optimization}
+loglik.obs <- function(Y, theta){
+    N <- length(Y)
+    loglik <- ((-N) * log(theta) ) - sum(Y/theta)
+    return(loglik)
+}
+
+score.obs <- function(Y, theta){
+    N <- length(Y)
+    score <- ((-N) * (1/theta)) + (sum(Y) * (1/theta^2))
+    return(score)
+}
+
+Newton.obs <- function(Y, init_theta, max_iter = 1e3, tol = 1e-10){
+    i <- 0
+    theta <- init_theta
+    loglik <- loglik.obs(Y, theta)
+    score <- score.obs(Y, theta)
+    res <- c(i, theta, loglik, score)
+    while(i < max_iter & abs(score) > tol){
+        i <- i + 1
+        loglik <- loglik.obs(Y, theta)
+        score <- score.obs(Y, theta)
+        theta <- theta - loglik/score
+        res <- rbind(res, c(i, theta, loglik, score))
+    }
+    return(res)
+}
+```
+
+\item Write out the joint distribution of $(Y, X)$, and design an EM algorithm to find the MLE of $\theta$. Clealy write out the E-steps and M-steps in each iteration, and implement the algorithm into an R function.
+
+
+
+\textbf{Answer:}
+
+
+
+
+
+\textbf{R codes:}
+```{r}
+
+```
+
+\item Simulate data sets with true $\theta=0.025$, and apply the optimization functions you developed in (2) and (3) to estimate $\theta$, which algorithm is more efficient (comparing the number of iterations and computing times)? 
+
+
+\textbf{Answer:}
+\vskip 100pt
+
+
+
+
+\textbf{R codes:}
+```{r}
+
+```
+
+
+
+
+
+\end{enumerate}
+

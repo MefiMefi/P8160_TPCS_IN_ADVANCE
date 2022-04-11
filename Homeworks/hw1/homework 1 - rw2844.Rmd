@@ -1,0 +1,133 @@
+---
+title: "Homework 1 - Monte Carlo Methods"
+author: "Renjie Wei  UNI: rw2844"
+
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE,message = FALSE)
+```
+
+# Problem 1
+The standard Laplace distribution has density $f(x) = 0.5e^{-|x|}, x\in
+(-\infty, \infty)$. Please provide an algorithm that uses the inverse transformation method to generate a random sample from this distribution. Use the $U(0,1)$ random number generator in  \em{\bf{R}}, write a  \em{\bf{R}}-function to implement the algorithm. Use visualization tools to validate your algorithm (i.e., illustrate whether the random numbers generated from your function truly follows the standard Laplace distribution.)
+
+# Answer: 
+
+Since $f(x) = 0.5e^{-|x|}, x\in
+(-\infty, \infty)$.
+
+Therefore,
+$$F(x) = \int_{-\infty}^{x}0.5e^{-|s|}ds=\\
+\int_{-\infty}^{x}0.5e^{s}ds\space(\text{if}\space x<0)\\
+\int_{-\infty}^{0}0.5e^{s}ds+\int_{0}^{x}0.5e^{-s}ds\space(\text{if}\space x\ge0)$$
+Hence,
+$$F(x)= 0.5e^x\cdot \mathbb{I}(X<0)+(1-0.5e^{-x})\cdot \mathbb{I}(X\ge0)\\
+=0.5[1+(-1)^{\mathbb{I}(X<0)} (1-e^{-|x|})]$$
+
+To get the inverse function $F^{-1}(U)$, solve $u = F(x)$:
+$$u=0.5e^{x} \ (\text{when}\space x<0\rightarrow 0\le u<0.5)\\
+x=\ln( 2u)\\
+or\\
+u=1-0.5e^{-x} \ (\text{when}\space x\ge0\rightarrow 0.5\le u\le 1)\\
+x=-\ln(2-2u)$$
+
+```{r Problem_1_solution}
+#Your R codes/functions
+library(ggplot2)
+set.seed(2022)
+n=1e4
+U<-runif(n)
+# inverse CDF
+xL = (U<0.5)*log(2*U)-(U>=0.5)*log(2-2*U)
+# the histogram of inverse CDF samples and Laplace distribution
+hist(xL,probability = T,main = bquote(f(x) == 0.5*exp(-abs(x))),xlim = c(-10,10),ylim = c(0,0.6))
+yL <- seq(-1e4,1e4,0.1)
+lines(yL,0.5*exp(-abs(yL)),col=2)
+```
+
+The plot above shows that the sample distribution is close to the Laplace distribution.
+
+
+# Problem 2
+
+Use the inverse transformation method to  derive an algorithm for generating a Pareto random number with $U\sim U(0,1)$, where the Pareto random number has a probability density function 
+     $$f(x; \alpha, \gamma)=\frac{\gamma\alpha^{\gamma}}{x^{\gamma+1}} I\{x\ge \alpha\}$$ with two parameters $\alpha >0$ and $\gamma>0$. Use visualization tools to validate your algorithm (i.e., illustrate whether the random numbers generated from your function truly follows the target distribution.)
+
+
+# Answer: 
+
+Since $f(x; \alpha, \gamma)=\frac{\gamma\alpha^{\gamma}}{x^{\gamma+1}} I\{x\ge \alpha\},\alpha >0,\ \gamma>0$.
+
+Therefore,
+$$F(x)=\int_{\alpha}^{x}\frac{\gamma\alpha^{\gamma}}{s^{\gamma+1}}ds = \alpha^\gamma s^{-\gamma}\bigg|_{\alpha}^{x}=1-\alpha^\gamma x^{-\gamma}$$
+To get the inverse function $F^{-1}(U)$, solve $u = F(x)$:
+$$
+u=1-\alpha^\gamma x^{-\gamma}(0<u\le1)\\
+x = \frac{\alpha}{\sqrt[\gamma]{1-u}}
+$$
+```{r problem_2_solution}
+#Your R codes/functions 
+set.seed(2022)
+n=1e5
+Up<-runif(n)
+# generating N random samples directly from Pareto(2,20) (parameters are tuned in order to make the stacked histogram readable)
+alphaP <- 5
+gammaP <- 10
+# now using the inverse CDF method
+xP = alphaP/(1-Up)^(1/gammaP)
+# the histogram of inverse CDF samples and samples from Laplace distribution
+hist(xP,probability = T,main = bquote(f(x) == 5^10*10/x^(10+1)),ylim = c(0,gammaP/alphaP*5/4))
+yP <- seq(alphaP,10,0.1)
+lines(yP,(gammaP*alphaP^gammaP)/(yP^(gammaP+1)),col=2)
+```
+
+The plot above shows that the sample distribution is close to the Pareto distribution.
+
+# Problem 3
+
+Construct an algorithm for using the acceptance/rejection method to generate 100 pseudorandom
+ variable from the pdf
+ $$f(x) = \frac{2}{\pi \beta^2} \sqrt{\beta^2-x^2}, \,\, -\beta \le x \le \beta.$$
+The simplest choice for $g(x)$ is the $U(-\beta, \beta)$ distribution but other choices are possible as well. Use visualization tools to validate your algorithm (i.e., illustrate whether the random numbers generated from your function truly follows the target distribution.)
+
+# Answer: 
+Since$f(x) = \frac{2}{\pi \beta^2} \sqrt{\beta^2-x^2}, \,\, -\beta \le x \le \beta$.
+
+We can show that $$\max f(x) = \frac{2}{\pi}$$
+When we decided to use the $U(-\beta, \beta)$ as the convenient distribution $g(x)$, then we should choose $M$ base on $M= \sup_{x\in[-\beta,\beta]} f(x)/g(x)=4\beta/\pi$.
+```{r problem_3_solution}
+#Your R codes/functions 
+# First, create a function to calculate the pdf of x with input parameter beta and Uniform samples xs
+targetdens <- function(beta,x){
+  return((2/pi*(beta^2))*((beta^2-x^2)^1/2))
+}
+
+convdens <- function(beta,x){
+  return(runif(length(x), min = -beta, max = beta))
+}
+# And the accept-rejection algorithm
+myAccrej <- function(M, x, beta){
+  U = runif(length(x))
+  selected = x[U <= (targetdens(beta,x) / (M * convdens(beta,x)))]
+  return(selected)
+}
+
+# Start sampling
+set.seed(2022)
+Beta = 1
+M = (4*Beta)/pi
+xT = runif(1e6,-Beta,Beta)
+samp = myAccrej(M=M,xT,Beta)
+
+# plot the sample histogram and the density curve, the plot shows that the shape of these two distributions are very close
+hist(samp, prob=T,xlab = "samples", main = bquote(f(x) == (2/pi)*sqrt(1-x^2)) )
+yT <- seq(-1,1,0.1)
+lines(yT,(2/pi)*sqrt(1-yT^2),col=2)
+```
+
+The plot above shows that the sample distribution is close to the target distribution.
+
+
+
