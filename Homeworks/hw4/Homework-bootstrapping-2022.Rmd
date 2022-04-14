@@ -21,6 +21,8 @@ set.seed(2022)
 library(parallel)
 library(foreach)
 library(doParallel)
+library(ggplot2)
+library(tidyverse)
 ```
 
 
@@ -47,7 +49,7 @@ An ophthalmologist designed a randomized clinical trial to evaluate a new laser 
  
 \begin{enumerate}
 \item[(1)]  The treatment effect of the new laser treatment is defined as $$E(Y\mid \mbox{trt = new}) - E(Y\mid \mbox{trt = traditional}).$$  Estimate the treatment effect using the collected data. 
-\item[(2)] Use bootstrap to construct 95% confidence interval of the treatment effect. Describe your bootstrap procedure, and what is your conclusion from the bootstrap CI?
+\item[(2)] Use bootstrap to construct 95 \% confidence interval of the treatment effect. Describe your bootstrap procedure, and what is your conclusion from the bootstrap CI?
 \end{enumerate}
 
 ### Problem 1.1
@@ -99,6 +101,7 @@ pairedboot <- function(paired, unpaired, nboot = 2000){
            # b-th bootstrap estimate of treatment effect
            mean(boot.trt) - mean(boot.ctrl)
         }
+        stopImplicitCluster()
         return(res)
 }
 
@@ -110,7 +113,6 @@ system.time({treatmenteffect.boot.res <- pairedboot(acui.paired, acui.unpaired, 
 treatmenteffect.boot.se <- sqrt(var(treatmenteffect.boot.res))
 
 
-
 hist(treatmenteffect.boot.res)
 ```
 
@@ -118,32 +120,45 @@ From 10000 bootstrap sample, we have a estimation of the treatment effect is `r 
 
 ### Problem 1.2
 
-The $100(1 − \alpha)\%$ confidence limits for the basic bootstrap confidence interval are
+The bootstrap method for this problem is discussed in Problem 1.1 above.
+
+And the implementation of this paired bootstrap is shown in the `pairedboot()` function.
+
+The $100(1-\alpha)\%$ confidence limits for the basic bootstrap confidence interval are
 
 $$(2\hat\theta-\hat\theta^*_{1-\alpha/2}, 2\hat\theta-\hat\theta^*_{\alpha/2})$$
 
-
-```{r boot_t_ci}
+```{r boot_ci}
 set.seed(2022)
+alpha = 0.05
+boot.ci <- function(boot_est, alpha, raw_est){
+    # use quantile function to get the upper and lower bound
+    qt <- quantile(boot_est, c(alpha/2, 1-alpha/2), type = 1)
+    names(qt) <- rev(names(qt))
+    CI <- rev(2 * raw_est - qt)
+    return(CI)
+}
 
-
+boot.CI <- boot.ci(treatmenteffect.boot.res, 0.05, raw_trt_eff)
+t(boot.CI) %>%  knitr::kable(digits = 3, caption = "95% confidence interval of bootstrap estimate of treatment effect", )
 ```
+
+The 95% confidence interval of the treatment effect $\hat\theta$ is shown in the table 1. Since the confidence interval contains 0, so we conclude that at 95% confident level, we cannot say that there is significant difference in treatment effect between the newer treatment and the older one.
 
 
 ## Problem 2 
+
 The Galaxy data consist of the velocities (in km/sec) of 82 galaxies from 6 well-separated
-conic sections of an unfilled survey of the Corona Borealis region. The
+conic sections of an unfilled survey of the Corona   region. The
 structure in the distribution of velocities corresponds to the spatial distribution of galaxies
 in the far universe. In particular, a multimodal distribution of velocities indicates a strong
 heterogeneity in the spatial distribution of the galaxies and thus is seen as evidence for the
-existence of voids and superclusters in the far universe.
+existence of voids and super clusters in the far universe.
 
 Statistically, the question of multimodality can be formulated as a test problem
 
 $$H_0: n_{\mbox{mode}} = 1 \quad \mbox{vs} \quad H_a: n_{\mbox{mode}} \ge 1$$
-where $n_{\mbox{mode}} $ is the number of modes of the density of the velocities.
-
-
+where $ n_{\mbox{mode}} $ is the number of modes of the density of the velocities.
 
 Considered nonparametric kernel density estimates
 $$ \widehat{f}_{K,h}(x) = \frac{1}{nh}\sum_{i=1}^n K(\frac{x - X_i}{h}) $$
@@ -180,17 +195,63 @@ plot(density(galaxies/1000, bw=3.5))
   nmodes <- length(rle(den.sign <- sign(s.1$y))$values)/2
 \end{verbatim}
 
+### Problem 2
+
+We are going to bootstrap from the sample distribution, which is the nonparametric kernel density function. Under the null hypothesis,  we assume that this density function is unimodal, $h_1 = 3.05$ 
+$$ \widehat{f}_{K,h_1}(x) = \frac{1}{nh_1}\sum_{i=1}^n K(\frac{x - X_i}{h_1})  $$
+
+where $K$ is a kernel function, in this case, we use `density` as an implementation of kernel density estimation. And the parameter `bw` represent the bandwidth we are interest.
+
+The following function `n.modes()` gives us the number of modes of the sample distribution for any given bandwidth  `bw`.
+```{r n_modes}
+n.modes <- function(data = galaxies, bw){
+    den <- density(data/1000, bw = bw)
+    den.s <- smooth.spline(den$x, den$y, all.knots = TRUE)
+    s.1 <- predict(den.s, den.s$x, deriv = 1)
+    nmodes <- length(rle(den.sign <- sign(s.1$y))$values)/2
+    return(nmodes)
+}
+```
+
+Since in each bootstrap, we want to find $h_1^{*(b)}$, the smallest $h$ for which this bootstrap sample has just $1$ mode. Under our null hypothesis, $h_1 = 3.05$. So we apply the `n.mode()` to each bootstrap sample by setting a sequence of bandwidths. Here, we only focus on bandwidths close to $h_1$ ($h_1^{*(b)}\in(e^1,e^{1.2}) \approx(2.72,3.32)$). Since if the null hypothesis is true, the bootstrap estimates $h_1^{*(b)}$ should be centered around the $h_1$.
+
+```{r problem_2_boot}
+#test.nmodes <- sapply(exp(seq(10, 15 , by = 0.001)/10), FUN = function(x) n.modes(galaxies, x) )
+cl <- makeCluster(12 , outfile = "")
+registerDoParallel(cl)
+n.boot.galaxy <- 500
+res.galaxies <- foreach(icount(n.boot.galaxy), .combine = 'c', .export = c('cl','parLapply','n.modes') , .packages = 'doParallel') %dopar% {
+    bootsamp <- sample(MASS::galaxies, length(MASS::galaxies), replace = TRUE)
+    # focusing on a bw range contains the h_1
+    bwseq <- exp(seq(5, 12 , by = 0.01)/10)
+    nmodes <- sapply(bwseq, FUN = function(x) n.modes(bootsamp, x))
+    res.df <- data.frame(bw = bwseq, nmodes = nmodes)
+    # return the minimum h gives us the unimodal distribution
+    min(res.df[which(res.df$nmodes == 1),]$bw)
+}
+stopCluster(cl)
+# calculate the p value of the 
+sum(res.galaxies>3.05)/n.boot.galaxy
+
+hist(res.galaxies, 50)
+```
+```{r}
+bwseq <- exp(seq(10, 12 , by = 0.01)/10)
+cl2 <- makeCluster(6 , outfile = "")
+registerDoParallel(cl2)
+clusterExport(cl=cl2, c('n.modes', 'galaxies'))
+nmodes <- parSapply(cl2, bwseq, FUN = function(x) n.modes(galaxies, x))
+res.df <- data.frame(bw = bwseq, nmodes = nmodes)
+# return the minimum h gives us the unimodal distribution
+min(res.df[which(res.df$nmodes == 1),]$bw)
+stopCluster(cl2)
+```
 
 
+## Problem 3 (the breast cancer study): 
 
 
-
-
-
-## Problem 3 (the breast cancer sutdy): 
-
-
-The data \textit{breast-cancer2.csv} have 569 patients. The first column \textbf{ID} lables individual breast tissue images; The second column \textbf{Diagnonsis} indentifies if the image is coming from cancer tissue or benign cases (M=malignant, B = benign). There are 357  benign and 212  malignant cases. The other 10 columns correspond to mean of the distributions of the following 10 features computed for the cellnuclei;
+The data \textit{breast-cancer2.csv} have 569 patients. The first column \textbf{ID} lables individual breast tissue images; The second column \textbf{Diagnonsis} identifies if the image is coming from cancer tissue or benign cases (M=malignant, B = benign). There are 357  benign and 212  malignant cases. The other 10 columns correspond to mean of the distributions of the following 10 features computed for the cellnuclei;
 \begin{itemize}
 \item radius (mean of distances from center to points on the perimeter)
 \item texture (standard deviation of gray-scale values)
@@ -221,9 +282,9 @@ glmnet(x, y, family = "binomial", alpha = 1, lambda = NULL)
 
 \item Using the selected predictors from the  "optimal" logistic LASSO to predict the probability of malignant for each of the images (Note that estimates from logistic-Lasso are biased. You need to re-fit the logistic regression with the selected predictors to estimate the probability.)  How well the predictors classify the images?
 
-\item Using the bootstraping smoothing idea to re-evaluate the probabilities of malignant. How well the new predictors classify the images?
+\item Using the bootstrapping smoothing idea to re-evaluate the probabilities of malignant. How well the new predictors classify the images?
 
-\item Writ a summary of your findings.
+\item Write a summary of your findings.
 \end{enumerate}
 
 

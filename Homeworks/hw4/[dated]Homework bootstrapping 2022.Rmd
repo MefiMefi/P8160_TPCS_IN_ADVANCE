@@ -118,14 +118,37 @@ From 10000 bootstrap sample, we have a estimation of the treatment effect is `r 
 
 ### Problem 1.2
 
-The $100(1 − \alpha)\%$ confidence limits for the basic bootstrap confidence interval are
 
-$$(2\hat\theta-\hat\theta^*_{1-\alpha/2}, 2\hat\theta-\hat\theta^*_{\alpha/2})$$
+I am going to build a Bootstrap t interval, it follows this procedure:
+
+Suppose the data $x = (x_1, . . . , x_n) $ contains both paired and unpaired data.
+
+1. Compute the observed statistic $\hat\theta = \text{raw treatment effect}$
+
+2. For each bootstrap replicate, indexed b = 1, . . . , B:
+
+-- Sample the subjects with replacement for the paired data, sample the observations with replacement for unpaired data, combine these two samples to get the whole bootstrap sample $x^{(b)} = (x_1^{(b)},\dots,x_n^{(b)})$.
+
+-- Compute the $\hat\theta^{(b)}$ from the $b^{th}$ sample $x^{(b)}$.
+
+-- Compute or estimate the standard error $\hat{se}(\hat\theta^{(b)})$ (a separate estimate for each bootstrap sample; a bootstrap estimate will resample $M$ replicates from the current bootstrap sample $x^{(b)}$, not $x$, so there are total $B\times M$ iterations).
+
+-- Compute the $b^{th}$ replicate of the "t" statistic, $t^{(b)} = \frac{\hat\theta^{(b)}-\hat\theta}{\hat{se}(\hat\theta^{(b)})}$
+
+3. The sample of replicates $t^{(1)}, . . . , t^{(B)}$ is the reference distribution for bootstrap $t$. Find the sample quantiles $t^∗_{α/2}$ and $t^*_{1−α/2} $ from the ordered sample of replicates $t^{(b)}$.
+
+4. Compute $\hat se (\hat\theta)$, the sample standard deviation of the replicates $\hat\theta^{(b)}$.
+
+5. Compute the confidence limits:
+$$(\hat\theta-t^*_{1−α/2},\ \hat\theta-t^∗_{α/2})$$
+
+Here is the code how I implement the Bootstrap t Confidence Intervals.
 
 
 ```{r boot_t_ci}
 set.seed(2022)
 
+system.time({boot.ci.data <- pairedboot.data(acui.paired, acui.unpaired, 1e4)})
 
 ```
 
